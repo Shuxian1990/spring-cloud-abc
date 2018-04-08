@@ -1,0 +1,25 @@
+server:
+  port: 8888
+spring:
+  config:
+    name: configServer
+  cloud:
+    config:
+      server:
+        git:
+          uri: git@techdoc.oa.com:shuxian/config-server-repo.git
+          # 启动时验证配置库是否可达
+          clone-on-start: true
+          # 使用默认的证书算法，这里只是为了显式告之，如果出现*Caused by: com.jcraft.jsch.JSchException: reject HostKey:*的错误，多半是证书算法格式不正确
+          host-key-algorithm: ssh-rsa
+          # 强制拉取，不让要本地clone变脏
+          force-pull: true
+          # 远端不存在的分支删掉
+          delete-untracked-branches: true
+          # 不使用临时目录，使用自定义目录
+          basedir: ${user.home}/Projects/Mine/spring-cloud-abc/spring-cloud-config/spring-cloud-config-server/config-server-repo/
+
+management:
+  security:
+    # 关掉安全校验，这是为了调用actuator endpoints，正式环境中不要关闭！！！！
+    enabled: false
