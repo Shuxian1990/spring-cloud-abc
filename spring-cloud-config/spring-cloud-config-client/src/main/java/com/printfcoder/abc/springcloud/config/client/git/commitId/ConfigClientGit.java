@@ -1,4 +1,4 @@
-package com.printfcoder.abc.springcloud.config.client.git;
+package com.printfcoder.abc.springcloud.config.client.git.commitId;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.SpringApplication;
@@ -23,8 +23,16 @@ class MessageRestController {
     @Value("${printfcoder.name}")
     private String message;
 
+    @Value("${printfcoder.description}")
+    private String description;
+
     @RequestMapping("/message")
     String getMessage() {
         return this.message;
+    }
+
+    @RequestMapping("/description")
+    String getDescription() {
+        return this.description;
     }
 }

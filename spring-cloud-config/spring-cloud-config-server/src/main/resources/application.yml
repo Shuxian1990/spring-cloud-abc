@@ -7,17 +7,33 @@ spring:
     config:
       server:
         git:
-          uri: git@techdoc.oa.com:shuxian/config-server-repo.git
+          # 默认配置库
+          uri: git@github.com:printfcoder/spring-cloud-abc-config-repo.git
           # 启动时验证配置库是否可达
           clone-on-start: true
           # 使用默认的证书算法，这里只是为了显式告之，如果出现*Caused by: com.jcraft.jsch.JSchException: reject HostKey:*的错误，多半是证书算法格式不正确
           host-key-algorithm: ssh-rsa
-          # 强制拉取，不让要本地clone变脏
+          # 强制拉取，不让要本地clone变脏，可以在repos中为特别的仓库设置不强制更新
           force-pull: true
           # 远端不存在的分支删掉
           delete-untracked-branches: true
           # 不使用临时目录，使用自定义目录
           basedir: ${user.home}/Projects/Mine/spring-cloud-abc/spring-cloud-config/spring-cloud-config-server/config-server-repo/
+          repos:
+            ## 使用profile来指定
+            simple-name-you-like:
+              uri: git@techdoc.oa.com:shuxian/config-server-repo.git
+              clone-on-start: true
+              # 指定目录，也可以使用占位符作为热缩
+              search-paths: profile-name
+              # 使用模式匹配，下面的这个模式会匹配应用名为`config-client-git`而profiles里有`profile-name`的应用
+              pattern: config-client-git/profile-name
+
+        # 重写
+        overrides:
+          foo: bar
+
+
 
 management:
   security:

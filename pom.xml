@@ -24,8 +24,6 @@
 
     <modules>
         <module>spring-context</module>
-
-        <module>spring-cloud-config-client-git</module>
         <module>spring-cloud-config</module>
     </modules>
 

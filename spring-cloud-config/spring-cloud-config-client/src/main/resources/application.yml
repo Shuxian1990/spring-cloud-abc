@@ -1,0 +1,8 @@
+server:
+  port: 8080
+spring:
+  application:
+    name: config-client-git
+  cloud:
+      config:
+        uri: http://localhost:8888
