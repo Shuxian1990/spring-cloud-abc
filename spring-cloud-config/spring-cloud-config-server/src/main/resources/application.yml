@@ -1,6 +1,9 @@
 server:
   port: 8888
 spring:
+  datasource:
+    username: dbuser
+    password: '{cipher}FKSAJDFGYOS8F7GLHAKERGFHLSAJ'
   config:
     name: configServer
   cloud:
@@ -34,8 +37,23 @@ spring:
         # 重写，意思是下面的配置如果在Client中存在，那么会被Config Server的值重写
         overrides:
           foo: bar
+        # 健康指示器
+        health:
+          repositories:
+            myservice:
+              label: mylabel
+            myservice-dev:
+              name: myservice
+              profiles: development
 
 management:
   security:
     # 关掉安全校验，这是为了调用actuator endpoints，正式环境中不要关闭！！！！
     enabled: false
+encrypt:
+  key: mykey
+  keyStore:
+    location: classpath:/server.jks
+    password: letmein
+    alias: mytestkey
+    secret: changeme
