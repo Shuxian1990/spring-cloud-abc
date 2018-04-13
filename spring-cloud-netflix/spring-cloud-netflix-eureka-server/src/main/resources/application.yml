@@ -1,0 +1,13 @@
+server:
+  port: 8761
+spring:
+  application:
+    name: netflix-server1
+  cloud:
+      config:
+        uri: http://localhost:8888
+eureka:
+  client:
+    # 下面两个配置先不向eureka注册，否则会报 com.sun.jersey.api.client.ClientHandlerException 拒绝连接异常
+    register-with-eureka: false
+    fetch-registry: false

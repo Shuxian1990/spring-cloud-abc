@@ -25,6 +25,7 @@
     <modules>
         <module>spring-context</module>
         <module>spring-cloud-config</module>
+        <module>spring-cloud-netflix</module>
     </modules>
 
     <dependencyManagement>
@@ -37,6 +38,7 @@
                 <scope>import</scope>
             </dependency>
         </dependencies>
+
     </dependencyManagement>
 
 </project>

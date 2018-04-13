@@ -34,6 +34,14 @@ spring:
               # 使用模式匹配，下面的这个模式会匹配应用名为`config-client-git`而profiles里有`profile-name`的应用
               pattern: config-client-git/profile-name
 
+            ## netflix-client配置
+            netflix-client:
+              uri: git@github.com:printfcoder/spring-cloud-abc-config-repo.git
+              clone-on-start: true
+              force-pull: true
+              search-paths: netflix-client
+              pattern: '*/netflix-client'
+
         # 重写，意思是下面的配置如果在Client中存在，那么会被Config Server的值重写
         overrides:
           foo: bar
