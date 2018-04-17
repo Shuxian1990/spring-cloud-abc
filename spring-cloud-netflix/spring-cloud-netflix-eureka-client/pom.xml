@@ -17,7 +17,7 @@
             <artifactId>spring-cloud-starter-eureka</artifactId>
         </dependency>
 
-        <!-- 使用配置中心 -->
+        <!-- 使用配置中心，这么做是为了本地尽可能少配置文件，达到同类应用配置共享 -->
         <dependency>
             <groupId>org.springframework.cloud</groupId>
             <artifactId>spring-cloud-config-client</artifactId>

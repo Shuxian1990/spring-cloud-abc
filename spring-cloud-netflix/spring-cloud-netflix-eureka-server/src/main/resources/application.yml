@@ -11,3 +11,6 @@ eureka:
     # 下面两个配置先不向eureka注册，否则会报 com.sun.jersey.api.client.ClientHandlerException 拒绝连接异常
     register-with-eureka: false
     fetch-registry: false
+    # 先指向本机
+    service-url:
+      default-zone: http://${eureka.instance.hostname}:${server.port}/eureka/
