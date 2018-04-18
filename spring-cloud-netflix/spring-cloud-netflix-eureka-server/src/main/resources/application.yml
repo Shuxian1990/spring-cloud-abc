@@ -14,3 +14,6 @@ eureka:
     # 先指向本机
     service-url:
       default-zone: http://${eureka.instance.hostname}:${server.port}/eureka/
+  instance:
+    metadata-map:
+      zone: zone1

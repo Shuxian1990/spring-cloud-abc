@@ -21,7 +21,7 @@ spring:
           # 远端不存在的分支删掉
           delete-untracked-branches: true
           # 不使用临时目录，使用自定义目录
-          basedir: ${user.home}/Projects/Mine/spring-cloud-abc/spring-cloud-config/spring-cloud-config-server/config-server-repo/
+          basedir: C:\Projects\mine\spring-cloud-abc\spring-cloud-config\spring-cloud-config-server\config-server-repo\
           repos:
             ## 使用profile来指定
             simple-name-you-like:

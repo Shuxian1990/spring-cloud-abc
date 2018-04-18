@@ -9,7 +9,7 @@
 
 1. 启动Config Server，在spring-cloud-config/spring-cloud-config-server
 2. 启动Netflix Eureka Server，在spring-cloud-netflix/spring-cloud-netflix-eureka-server
-3. 启动Netflix Eureka Client
+3. 启动Netflix Eureka Client，在spring-cloud-netflix/spring-cloud-netflix-eureka-client
 
 # 相关链接
 
