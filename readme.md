@@ -1,7 +1,7 @@
 
-# basic-netflix
+# basic-netflix-eureka
 
-本分支是netflix基础示例，里面包含Netflix Server与Client，配置使用的是匹配中心Config Server。
+本分支是netflix-eureka基础示例，里面包含Netflix Server与Client，配置使用的是匹配中心Config Server。
 
 # 服务发现 Eureka 
 
