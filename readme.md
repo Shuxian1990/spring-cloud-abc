@@ -14,4 +14,4 @@
 # 相关链接
 
 1. [Spring-Cloud-Config示例说明](https://printfcoder.github.io/myblog/spring/2018/03/28/spring-cloud-config/)
-2. [示例说明参考](https://printfcoder.github.io/myblog/spring/2018/04/13/spring-cloud-netflix/)
+2. [示例说明参考](https://printfcoder.github.io/myblog/spring/2018/04/13/spring-cloud-netflix-eureka/)
