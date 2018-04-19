@@ -23,9 +23,6 @@
     <packaging>pom</packaging>
 
     <modules>
-        <module>spring-context</module>
-        <module>spring-cloud-config</module>
-        <module>spring-cloud-netflix</module>
         <module>spring-cloud-home-plan-account-center</module>
     </modules>
 
