@@ -1,7 +1,7 @@
 
-# basic-netflix
+# basic-netflix-circuit-breaker
 
-本分支是netflix基础示例，里面包含Netflix Server与Client，配置使用的是匹配中心Config Server。
+本分支是netflix circuit breaker 基础示例，里面包含Netflix Server与Client，配置使用的是匹配中心Config Server。
 
 # 服务发现 Eureka 
 
@@ -14,4 +14,5 @@
 # 相关链接
 
 1. [Spring-Cloud-Config示例说明](https://printfcoder.github.io/myblog/spring/2018/03/28/spring-cloud-config/)
-2. [示例说明参考](https://printfcoder.github.io/myblog/spring/2018/04/13/spring-cloud-netflix/)
+
+2. [示例说明参考](https://printfcoder.github.io/myblog/spring/2018/04/13/spring-cloud-netflix-eureka/)
