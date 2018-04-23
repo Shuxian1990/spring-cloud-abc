@@ -1,0 +1,8 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/usercenter
+    username: postgres
+    password: postgres
+    schema: classpath:import.sql
+    # 创建数据库后可关闭，重启时不再创建
+    initialize: false
