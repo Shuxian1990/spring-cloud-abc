@@ -8,3 +8,9 @@ spring:
     schema: classpath:import.sql
     # 创建数据库后可关闭，重启时不再创建
     initialize: false
+eureka:
+  client:
+    service-url:
+      default-zone: http://localhost:8761/eureka/
+    health-check:
+      enabled: true
