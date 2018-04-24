@@ -1,4 +1,6 @@
 spring:
+  application:
+    name: User_Center_Service
   datasource:
     url: jdbc:postgresql://localhost:5432/usercenter
     username: postgres
