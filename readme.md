@@ -1,255 +1,158 @@
-Spring Cloud 为开发者提供了一系列工具，用于在分布式系统中快速开发通用的模板，比如配置管理、服务发现、断路器、智能路由、微代理、控制总线、一次性证书token、全局锁、主从选举、分布式会话、集群状态）
+[前一篇][第一篇]我们介绍了Spring Cloud的基本概念，并实现了初步实现了`用户服务`。
 
-本系列我们会把这些组件用起来，为此，要让这些技术应用得合理，我们需要虚拟一个家庭计划管理项目，架构大致如下：
+Spring Cloud Netflix为Spring Boot应用提供[Netflix OSS（开源软件服务）][netflix_oss]集成与自动配置，和其它Spring应用一样的使用风格。只需要极少的标记就能快速激活和配置通用的组件，通过它们使用久经考验的Netflix组件来构建大型的分布式应用系统。
 
-1. 基础服务 Eureka、Config Server
-2. 用户服务
-3. 计划服务
-4. Web接入层（门面层）
+这些组件提供包括服务发现（Eureka）、断路器（Hystrix）、智能路由（Zuul）和客户端负载均衡（Ribbon）。
 
-Web接入层负责接收所有请求并代理转发到其它服务，而其它的服务一律不接收从客户端过来的请求。
+# 服务发现 Eureka
 
-首先我们先尝试把用户服务搭建起来，让Web接入层有可以转发的地方。
+服务发现是基于微服务架构的关键点。管理每一个客户端或者基于某种形式的约定非常困难而且做起来很脆弱。Eureka是Netflix服务发现的服务端与客户端。服务端可以配置和部署达到高可用，它们之间会共享注册上来的服务的状态
 
-# 预置条件
+## Eureka Server
 
-假设读者有一定的Spring、Spring Boot基础知识。具体maven pom文件依赖可以参考[本文代码][本文代码]，这里不花篇幅说明配置。
-
-## pom依赖与应用
-
-首先依赖spring-cloud全家桶maven，这样可以省去查找相关依赖包的麻烦：
+Eureka Server只需要加入一个依赖：
 
 ```xml
-<dependencyManagement>
-        <dependencies>
-            <dependency>
-                <groupId>org.springframework.cloud</groupId>
-                <artifactId>spring-cloud-dependencies</artifactId>
-                <version>${spring-cloud-version}</version>
-                <type>pom</type>
-                <scope>import</scope>
-            </dependency>
-        </dependencies>
-</dependencyManagement>
+<dependencies>
+     <dependency>
+         <groupId>org.springframework.cloud</groupId>
+         <artifactId>spring-cloud-starter-netflix-eureka-server</artifactId>
+     </dependency>
+</dependencies>
 ```
 
-# 用户服务
+创建服务也非常简单：
 
-## 创建项目
-
-可以到[SPRING INITIALIZR](https://start.spring.io/)上初始化一个空白项目，也可以到参考[分支][本章分支]自行构建。
-
-主体目录结构：
-
-```log
-└─spring-cloud-home-plan-account-center  // 用户服务子pom目录
-    ├─src
-    │  └─main
-    │      ├─java
-    │      │  └─com
-    │      │      └─printfcoder
-    │      │          └─abc
-    │      │              └─springcloud
-    │      │                  └─accountcenter
-    │      │                      ├─controller  // API接口
-    │      │                      ├─domain      // 对象领域
-    │      │                      ├─launch      // 启动器，main所在目录
-    │      │                      ├─repository  // mapper
-    │      │                      └─service     // 服务类
-    │      └─resources
+```java
+@EnableEurekaServer
+@SpringBootApplication
+public class SpringCloudNetflixEurekaServer {
+    public static void main(String[] args) {
+        SpringApplication.run(SpringCloudNetflixEurekaServer.class, args);
+    }
+}
 ```
 
-我们不使用过多的`interface`比如`service`与`serviceImpl`等。
+启动后用浏览器打开[本地8761](http://localhost:8761)， 就可以看到Eureka后台。
 
-## 依赖
+### 高可用、区域和分区（Zone & Region）
 
-创建maven项目，基础依赖：
+Eureka服务并不会去存储状态，而是所有应用服务向Eureka发送心跳，以一定的频率保持注册在线，这一切都是在内存中保存的。客户端也会自己维护从Eureka上获取来的注册信息，所以客户端没有必要每次向服务端的请求都要获取整个注册表信息。
+
+默认情况下，Eureka Server端同时也是Eureka Client，并且需要至少一个的service-url指向配对的Eureka Server Zone和Region。如果不提供这个URL，服务本身也是会运行的，只是日志中会有一堆警告显示不能向对方注册。
+
+### 独立模式
+
+客户端与服务端缓存结合和检测心跳可以让独立的Eureka Server有弹性地适应故障，就像有些监控和弹性运行时服务一样（比如Cloud Foundry），独立模式中：
 
 ```yml
+eureka:
+  instance:
+    hostname: localhost
+  client:
+    register-with-eureka: false
+    fetch-registry: false
+    service-url:
+      default-zone: http://${eureka.instance.hostname}:${server.port}/eureka/
+```
+
+可以看到`register-with-eureka`和`fetch-registry`都设置成了`false`，这个就是让Eureka工作在独立模式中，让它不要尝试去连接他的配对Eureka Server并且没有找到时也不要报错误。
+
+### 服务互发现
+
+Eureka通过多实例部署、互相注册达到弹性与高可用。默认情况下，互相注册是打开的，通过`serviceUrl`向其它实例注册。
+
+下面这段是两个Eureka Server的`application.yml`配置
+
+```yml
+---
+spring:
+  profiles: peer1
+eureka:
+  instance:
+    hostname: peer1
+  client:
+    serviceUrl:
+      defaultZone: http://peer2/eureka/
+
+---
+spring:
+  profiles: peer2
+eureka:
+  instance:
+    hostname: peer2
+  client:
+    serviceUrl:
+      defaultZone: http://peer1/eureka/
+```
+
+Peer1与Peer2互相注册。运行的时候可以在host文件中配上peer1和peer2域名地址。`eureka.instance.hostname`占位符在单机部署时其实是可以不用的，因为通过`java.net.InetAddress`可以找到自身的hostname。
+
+Peer之间通过直连同步注册信息。
+
+下面是三个Eureka Server实例的`application.yml`
+
+```yml
+eureka:
+  client:
+    serviceUrl:
+      defaultZone: http://peer1/eureka/,http://peer2/eureka/,http://peer3/eureka/
+
+---
+spring:
+  profiles: peer1
+eureka:
+  instance:
+    hostname: peer1
+
+---
+spring:
+  profiles: peer2
+eureka:
+  instance:
+    hostname: peer2
+
+---
+spring:
+  profiles: peer3
+eureka:
+  instance:
+    hostname: peer3
+```
+
+为了减少篇幅，公用的部分在最上面，不一样的在`---`分行占位符之间。
+
+### 使用IP地址
+
+有些情况下，让Eureka通知应用使用ip而不是用hostname。可以设置`eureka.instance.preferIpAddress=true`，然后应用注册到Eureka时，它使用的就是它的ip地址，而不是hostname。
+
+## Eureka Client
+
+客户端注册到Eureka服务时，它需要像提供主机名、应用名、端口、主页、健康检测URL等等元数据。Eureka会接收到从每一个客户端实例中发送来的心跳消息。如果心跳在配置好的时间表中没有发送过去，Eureka就会把这个实例从注册表中移除。
+
+我们用[前一篇][第一篇]中实现的`用户服务`来充当客户端。
+
+### 导入依赖
+
+使用Eureka Client也非常简单，在项目的maven pom.xml引入下面的依赖：
+
+```xml
 <dependencies>
         <dependency>
-            <groupId>org.mybatis.spring.boot</groupId>
-            <artifactId>mybatis-spring-boot-starter</artifactId>
-        </dependency>
-
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-web</artifactId>
-        </dependency>
-
-        <dependency>
-            <groupId>org.projectlombok</groupId>
-            <artifactId>lombok</artifactId>
-            <scope>provided</scope>
-        </dependency>
-
-        <dependency>
-            <groupId>org.postgresql</groupId>
-            <artifactId>postgresql</artifactId>
-        </dependency>
-
-        <!-- test dependencies -->
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-test</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.mybatis.spring.boot</groupId>
-            <artifactId>mybatis-spring-boot-starter-test</artifactId>
-            <scope>test</scope>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
         </dependency>
 </dependencies>
 ```
 
-## 创建数据库
+### 注册
 
-我们使用PG的第三方发行版本，[BigSQL][BigSQL]。比起原生的PG好用一些，参考官网装上。
-
-装好后配置数据库：
-
-```yml
-spring:
-  datasource:
-    url: jdbc:postgresql://localhost:5432/usercenter
-    username: postgres
-    password: postgres
-    schema: classpath:import.sql
-    # 创建数据库后可关闭，重启时不再创建
-    initialize: false
-```
-
-如果PG没有装在本地，那么把上面的`localhost`改成相应的地址即可。`import.sql`是初始化脚本，如果不执行可以把`spring.datasource.initialize`设置成`false`。
-
-import.sql如下：
-
-```sql
-CREATE TABLE IF NOT EXISTS public.account (
-  id           serial PRIMARY KEY,
-  account_name VARCHAR(50)  NOT NULL,
-  login_name   VARCHAR(50),
-  pwd          VARCHAR(128) NOT NULL
-);
-
-INSERT INTO public.account (account_name, login_name, pwd)
-VALUES ('test', 'test', '123') ON CONFLICT DO NOTHING;
-```
-
-public是默认的schema。
-
-## domain 和 mapper
-
-在`com.printfcoder.abc.springcloud.accountcenter.domain`创建`Account`类：
+然后通过`@EnableEurekaClient`就可以启用：
 
 ```java
-package com.printfcoder.abc.springcloud.accountcenter.domain;
-
-import lombok.Data;
-
-@Data
-public class Account {
-
-    private String loginName;
-
-    /**
-     * 暂时先用明文
-     */
-    private String pwd;
-
-    private String accountName;
-
-}
-```
-
-为了不然本项目复杂化，密码先用明文
-
-到`com.printfcoder.abc.springcloud.accountcenter.repository`包下创建接口`AccountMapper`，增加根据登录名查询账户的方法`queryAccountByLoginName`：
-
-```java
-package com.printfcoder.abc.springcloud.accountcenter.repository;
-
-import com.printfcoder.abc.springcloud.accountcenter.domain.Account;
-import org.apache.ibatis.annotations.Mapper;
-import org.apache.ibatis.annotations.Param;
-import org.apache.ibatis.annotations.Select;
-
-@Mapper
-public interface AccountMapper {
-
-    @Select("SELECT\n"
-        + "  id,\n"
-        + "  account_name AS accountName,\n"
-        + "  login_name   AS loginName,\n"
-        + "  pwd\n"
-        + "FROM account\n"
-        + "WHERE login_name = #{loginName}")
-    Account queryAccountByLoginName(@Param("loginName") String loginName);
-}
-```
-
-## service
-
-在`com.printfcoder.abc.springcloud.accountcenter.service`下创建`AccountService`：
-
-```java
-package com.printfcoder.abc.springcloud.accountcenter.service;
-
-import com.printfcoder.abc.springcloud.accountcenter.domain.Account;
-import com.printfcoder.abc.springcloud.accountcenter.repository.AccountMapper;
-import javax.annotation.Resource;
-import org.springframework.stereotype.Service;
-
-@Service
-public class AccountService {
-
-    @Resource
-    private AccountMapper accountMapper;
-
-    public Account queryAccountByLoginName(String loginName) {
-        return accountMapper.queryAccountByLoginName(loginName);
-    }
-}
-```
-
-## controller
-
-```java
-package com.printfcoder.abc.springcloud.accountcenter.controller;
-...
-@RestController
-@RequestMapping("account")
-public class AccountController {
-
-    @Autowired
-    private AccountService accountService;
-
-    @GetMapping("get-account-by-loginname-and-pwd")
-    public Account getAccountByLoginNameAndPwd(@RequestParam("loginName") String loginName, @RequestParam("pwd") String pwd) {
-        Account account = accountService.queryAccountByLoginName(loginName);
-        // 先只进行简单对比，暂不处理加密等
-        if (account != null && pwd.equals(account.getPwd())) {
-            return account;
-        }
-        return null;
-    }
-}
-
-```
-
-## Application
-
-Mapper、Service、Contrller创建好之后，下面创建Application。因为我们基于Spring Boot创建应用，所以，这一步只需要几行代码、几个标记就可以把服务跑起来：
-
-```java
-package com.printfcoder.abc.springcloud.accountcenter.launch;
-
-import org.mybatis.spring.annotation.MapperScan;
-import org.springframework.boot.SpringApplication;
-import org.springframework.boot.autoconfigure.SpringBootApplication;
-import org.springframework.context.annotation.ComponentScan;
-
 @ComponentScan("com.printfcoder.abc.springcloud.accountcenter")
 @MapperScan("com.printfcoder.abc.springcloud.accountcenter.repository")
+@EnableEurekaClient
 @SpringBootApplication
 public class AccountCenterServer {
     public static void main(String[] args) {
@@ -258,28 +161,74 @@ public class AccountCenterServer {
 }
 ```
 
-标记`@ComponentScan`用于告诉Spring去扫描其参数路径下面打了组件标记（如`@Controller`、`@RestController`、`@Service`等）的类，这些类会被创建成`Spring Bean`。而`@MapperScan`是告诉Mybatis扫描路径下打了`@Mapper`（默认是`@Mapper`标记）的interface，并生成代理类来操作数据库。
+上面这个示例是完整的Spring Boot风格的app。这个例子中，使用了`@EnableEurekaClient`标记，也并非只有Eureka服务发现可用，也可以使用`@EnableDiscoveryClient`。然后配置注册到Eureka Server的URL：
 
-## 运行
-
-```shell
-$mvn spring-boot:run -o
+```yml
+eureka:
+  client:
+    service-url:
+      default-zone: http://localhost:8761/eureka/
 ```
 
-`-o` 是`offline`的意思，指定maven不要下载，使用离线模式。这样maven只会在第一次编译时下载必要的依赖包与文件描述文件，以后如果没有更新依赖就不会下载了。
+`default-zone`比较神奇字符串值，它告诉客户端使用这个作为默认的Eureka服务地址。
 
-不过，建议使用IDE导入项目，这样有效率得多，比如IDEA、Eclipse等。
+> `Discovery Service`服务发现的实现中，像eureka, consul, zookeeper都有实现，而`@EnableDiscoveryClient`是spring-cloud-common中的实现。`@EnableEurekaClient`则只是给Eureka配套的服务发现。
 
-打开浏览器窗口，输入`http://localhost:8080/account/get-account-by-loginname-and-pwd?loginName=test&pwd=123`
+`spring-cloud-starter-netflix-eureka-client`依赖中的jar包会让应用初始化为Eureka实例（instance）与客户端（client）。可以通过`eureka.instance.*`来控制，只要保证`spring.application.name`不为空，这些默认的配置就可以不用管。
+
+关闭Eureka客户端发现功能，可以设置`eureka.client.enabled`为`false`。
+
+启动后用浏览器打开[本地8761](http://localhost:8761)， 就可以看到Eureka后台有名叫`USER_CENTER_SERVICE`服务注册到了它上面。
+
+### Eureka 服务验证
+
+Eureka支持在`default-zone`URL中指定基础的HTTP验证，比如`http://user:password@localhost:8761/eureka`。如果要更复杂的方式，可以实现`DiscoveryClientOptionalArgs`,把`ClientFilter`注入到它里面，所有从客户端到服务端的调用都会应用到。
+
+> 受限于Eureka的实现，目前不能做到给每个Eureka服务都声明各自的验证方式，只有第一个被发现的服务的验证方式会生效。
+
+### 状态页与健康指示器
+
+Spring Boot应用依赖Spring Boot Actuator后，默认就会有两个endpoint页面：状态页（/info）和健康指示器（/health)。如果要改动这个url，特别是在应用被发布在其它目录（比如 `server.servletPath=/foo`）或者管理路由（`management.contextPath=/admin`）时可以通过配置来修改,让其指向其它目录：
+
+```yml
+eureka:
+  instance:
+    status-page-url: ${management.context-path}/info
+    health-check-url: ${management.context-path}/health
+```
+
+### 注册安全的应用
+
+如果app要通过HTTPS连接，那么要分别设置`eureka.instance.[non-secure-port-enabled,secure-port-enabled]=[false,true]`。
+这样配置会让Eureka发布实现信息时偏向于使用安全链接。Spring Cloud的`DiscoveryClient`就会返回`https://...`的URL，并且Eureka实例健康检测URL也是安全链接。
+
+### 健康检测
+
+默认情况下，Eureka使用客户端心跳来判定是否客户端仍在工作。除了特殊情况，Discovery Client不会传播的每个Spring Boot Actuator当前应用的健康检测状态。也就是说，成功注册到Eureka后，就会声明该应用处于`工作`状态。不过可以通过声明Eureka健康检测改变这个默认方式，健康检测会把应用的状态传送给Eureka，该配置会把应用的状态传播到Eureka。
+
+```yml
+eureka:
+  client:
+    health-check:
+      enabled: true
+```
+
+> `eureka.client.health-check.enabled=true` 只能在`application.yml(properties)`中配置，如果在`bootstrap.yml`会导致不好的影响，比如注册到Eureka时，状态会是`UNKNOWN`。
+
+可以实现`com.netflix.appinfo.HealthCheckHandler`来完成更复杂的健康检测。
+
+## 为什么注册服务会慢
+
+实例启动后，会有周期性的心跳发送到Eureka服务（通过`service-url`指定)，默认的周期是30s。服务在启动后客户端无法访问，直到客户端、实例、服务三者之间的缓存都更新了之后，客户端才能访问到服务接口，所以，可能会花掉3*30这么长的周期。可以通过设置`eureka.instance.lease-renewal-interval-in-seconds`调小时加快客户端可以向服务端访问的进度。在生产环境中，建议保留默认值，因为30秒是比较合适的值，服务会假设这个是更新周期进行一系列内部计算。
 
 # 总结
 
-本章我们引入了Spring Cloud的概念及其主要特性，但是我们还没有用它的特性来实现任何业务，只是基于Spring Boot实现了一个简单的Web MVC应用，也就是`用户服务`，但是这是必须的，因为下一章交付介绍`Netflix Eureka`，`用户服务`会向`Eureka注册`，所以我们得先实现一个服务让其去注册并对外提供服务。
+本章简单介绍了Eureka的服务端与客户端基本配置与部署，顺带讲了健康检测等特性，后面随着章节的深入，会加入分区、健康检测（深入讲解）等。敬请期待！
 
 # 相关链接
 
-1. [本文代码][本章分支]
-2. [BigSQL][BigSQL]
+1. [netflix 上手1][参考文章1]
+2. [netflix 上手2][参考文章2]
 
 ## 本系列文章
 
@@ -289,5 +238,8 @@ $mvn spring-boot:run -o
 [第一篇]: https://printfcoder.github.io/myblog/spring/2018/04/12/abc-spring-cloud-part-1/
 [第二篇]: https://printfcoder.github.io/myblog/spring/2018/04/13/abc-spring-cloud-part-2-netflix-eureka/
 
-[BigSQL]: http://www.openscg.com/bigsql/
-[本章分支]: https://github.com/printfcoder/spring-cloud-abc/tree/basic-part1
+[netflix_oss]: https://netflix.github.io/
+[参考文章1]: https://cloud.spring.io/spring-cloud-netflix/multi/multi__service_discovery_eureka_clients.html
+[参考文章2]: https://cloud.spring.io/spring-cloud-static/spring-cloud.html#_spring_cloud_netflix
+
+[本文代码]: https://github.com/printfcoder/spring-cloud-abc/tree/basic-part2-netflix-eureka
