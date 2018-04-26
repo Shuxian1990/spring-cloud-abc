@@ -17,6 +17,12 @@
             <artifactId>spring-cloud-starter-netflix-zuul</artifactId>
         </dependency>
 
+        <!-- 注册到Eureka，让ribbon可以读取挂载到Eureka的服务 -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
+        </dependency>
+
         <!-- 方便查看及管理路由等信息 -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
