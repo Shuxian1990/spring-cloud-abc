@@ -1,245 +1,380 @@
-[前一篇][第一篇]我们介绍了Spring Cloud的基本概念，并实现了初步实现了`用户服务`。
+---
+title: Spring Cloud ABC 之 Spring Cloud Netflix Zuul
+date: 2018-04-15 08:40
+categories:
+ - Spring 
+tags:
+ - Spring Cloud
+---
 
-Spring Cloud Netflix为Spring Boot应用提供[Netflix OSS（开源软件服务）][netflix_oss]集成与自动配置，和其它Spring应用一样的使用风格。只需要极少的标记就能快速激活和配置通用的组件，通过它们使用久经考验的Netflix组件来构建大型的分布式应用系统。
+[前一篇][第二篇]我们介绍了Netflix Eureka的基本用法，并实现了初步实现了`服务注册`。
 
-这些组件提供包括服务发现（Eureka）、断路器（Hystrix）、智能路由（Zuul）和客户端负载均衡（Ribbon）。
+对于内部微服务的接口路由，比如`/`一般会定位到你的Web应用，而像`/api/users`或者`/api/plan`，则会被路由到`user`服务或`plan`服务。Netflix使用Zuul来实现请求的路由，Zuul是基于JVM实现的路由及服务端负载均衡器。
 
-# 服务发现 Eureka
+[Netflix主要用Zuul][Netflix_uses_zuul]来实现：
 
-服务发现是基于微服务架构的关键点。管理每一个客户端或者基于某种形式的约定非常困难而且做起来很脆弱。Eureka是Netflix服务发现的服务端与客户端。服务端可以配置和部署达到高可用，它们之间会共享注册上来的服务的状态
+1. 认证（Authentication）
+2. 检查（Insights）
+3. 压测（Stress Testing）
+4. 灰测（Canary Testing）
+5. 动态路由（Dynamic Routing）
+6. 服务迁移（Service Migration）
+7. 负载限制（Load Shedding）
+8. 安全（Security）
+9. 静态响应处理（Static Response handling）
+10. 主动流向管理（Active/Active traffic management）
 
-## Eureka Server
+> 金丝雀测试也就是灰度发布测试的初期阶段，历史上早期煤矿矿工在矿洞中前行时，用金丝雀来检测一氧化碳，当矿工带着金丝雀走到一氧化碳多的地方时，它就会敏感而躁动，所以引申而来，希望第一批用户在使用时可以充分反馈（主动或者通过流量日志等）以达到判断是否可以继续发布的标准。
 
-Eureka Server只需要加入一个依赖：
+Zuul的规则引擎支持基于JVM的语言编写的规则与过滤器，比如Java、Groovy。
+> `zuul.max.host.connections`已经被改成两个配置，
+`zuul.host.maxTotalConnections`和`zuul.host.maxPerRouteConnections`，默认值分别是200、20
 
-```xml
-<dependencies>
-     <dependency>
-         <groupId>org.springframework.cloud</groupId>
-         <artifactId>spring-cloud-starter-netflix-eureka-server</artifactId>
-     </dependency>
-</dependencies>
+# Zuul反向代理
+
+我们会使用Zuul反向代理，把请求转发对应的后台应用和服务，这样可以避免后台服务直接暴露在外网，也顺便解决了单一接入层的跨域问题。
+
+只需要在应用上main类加上`@EnableZuulProxy`标记即可，这个代理会把请求转向到对应的服务。一般而言，我们会把向`/user/***`的请求转到应用id为`user`的服务。代理使用`Ribbon`定位到它通过服务发现找到的服务。
+
+> Zuul Starter并不包含有服务发现客户端（discovery client），所以要基于Service ID路由到服务，得在classpath中提供一个发现客户端（比如Eureka）
+
+Zuul会自动添加服务，但是也可以选择忽略某些服务，通过配置`zuul.ignored-services`，在这个配置上配置好服务id的模式列表即可。如果服务的id匹配了这个模式，那么就会被忽略，但是在路由表中显式配置上了这个服务，那么不会被忽略。
+
+比如，使用模式`*`，它会匹配所有的服务id：
+
+```yml
+ zuul:
+  ignored-services: '*'
+  routes:
+    users: /myusers/**
 ```
 
-创建服务也非常简单：
+上面的这个例子中，`users`不会被忽略，其它都会被忽略
 
-```java
-@EnableEurekaServer
-@SpringBootApplication
-public class SpringCloudNetflixEurekaServer {
-    public static void main(String[] args) {
-        SpringApplication.run(SpringCloudNetflixEurekaServer.class, args);
-    }
+对于细粒度的控制，可以单独给路径配置特殊的服务id：
+
+```yml
+zuul:
+  routes:
+    users:
+      path: /myusers/**
+      service-id: users_service
+```
+
+上面的这个例子中，所有请求以`/myusers`开头的都会被转向`users_service`。注意，`/myusers/*`只会匹配一层路由，而`/myusers/**`会匹配所有层级。
+
+被代理服务可以通过service-id转向，也可以通过`url`（实实在在的地址）：
+
+```yml
+zuul:
+  routes:
+    users:
+      path: /myusers/**
+      url: http://example.com/users_service
+```
+
+但是，URL路由是不会经过`HystrixCommand`指令跳转的，也不用不了Ribbon的负载均衡。为了达到这点，得再行配置Service，比较麻烦，超出本节讨论的范围，后面进阶章节会再讨论。
+
+# Cookies和Headers
+
+你可以在同一系统的不同服务之间共享Headers，但是把请求的Headers泄露到外部应用就非常危险。可以在路由配置中忽略指定的header。像Cookies这种敏感的头部信息就比较特殊，如果你的应用是通过浏览器请求的，那么Cookies对于下游的服务就会引发问题，因为这些Cookies混杂在一起，让所有下游的服务都会认为它们来自同一个地方。
+
+设计服务时就要小心，比如，只有一个服务会设置Cookies，那么你可能会让这些Cookies全程从后台传到调用者。而且，如果代理设置了Cookies，那么所有在同一个系统中的后台服务都可以共享它们，比如通过Spring Session把这些共享的状态串联起来。除了这些，对于在服务设置的Cookie，看上去对于调用者是没有什么用的，所以，推荐在配置中把不属于你的服务域的`Set-Cookie`和`Cookie`设为敏感。甚至对于域中的路由，也要考虑清楚Cookies在路由与代理之间传递有什么意思。
+
+敏感的headers可以通过逗号分隔的字符串列表来配置：
+
+```yml
+zuul:
+  routes:
+    users:
+      path: /myusers/**
+      sensitive-headers: Cookie,Set-Cookie,Authorization
+      url: https://downstream
+```
+
+> 上面的sensitive-headers是默认值，所以如果只是这些敏感的话，是不用配置的，除非有不一样的地方。这是Spring Cloud Netflix1.1中加的新特性，1.0是不能控制Headers的，而所有的Cookies都会两点之间传送）。
+
+`sensitive-headers`其实就是黑名单，而默认值不是空。因此，要让Zuul一个都不忽略地向下游服务传送，就必须显式设置它为空，如果要把Cookies或认证头信息往下传是有必要这么设置的：
+
+```yml
+zuul:
+  routes:
+    users:
+      path: /myusers/**
+      sensitive-headers:
+      url: https://downstream
+```
+
+也可以设置全局的`sensitive-headers`，通过设置`zuul.sensitive-headers`。但是显式设置路由的`sensitive-headers`，那么它会覆盖全局配置。
+
+# 忽略头部信息
+
+作为基于路由的敏感头配置补充，Spring Cloud Netflix给在下游服务之间交互时忽略头部增加了配置`zuul.ignored-headers`，包含request和response的头部。默认情况下，如果没有依赖Spring Security，这值就是空的。其它情况下，它们会被Spring Security设置成`security`安全头，比如缓存。
+
+这么做是假定下游服务可能会增加自已的头信息，而我们希望这些头信息应该由代理填充。当依赖了Spring Security时，如果不想丢弃某些常见知名用安全头信息，可以设置`zuul.ignore-security-headers`为`false`。对于不想让Spring Security来处理响应安全头，而要让下游的服务处理时，就可以这么设置。
+
+# 管理Endpoint接口
+
+如果使用`@EnableZuulProxy`的同时也引入Spring Boot Actuator，那么会激活下面两个endpoint：
+
+1. Routes
+2. Filters
+
+## Routes Endpoint
+
+请求`/routes`时就会返回如下结构的数据：
+
+```json
+{
+  "/stores/**": "http://localhost:8081"
 }
 ```
 
-启动后用浏览器打开[本地8761](http://localhost:8761)， 就可以看到Eureka后台。
+在queryString中增加参数`?format=details`，返回信息可以更详细：
 
-### 高可用、区域和分区（Zone & Region）
-
-Eureka服务并不会去存储状态，而是所有应用服务向Eureka发送心跳，以一定的频率保持注册在线，这一切都是在内存中保存的。客户端也会自己维护从Eureka上获取来的注册信息，所以客户端没有必要每次向服务端的请求都要获取整个注册表信息。
-
-默认情况下，Eureka Server端同时也是Eureka Client，并且需要至少一个的service-url指向配对的Eureka Server Zone和Region。如果不提供这个URL，服务本身也是会运行的，只是日志中会有一堆警告显示不能向对方注册。
-
-### 独立模式
-
-客户端与服务端缓存结合和检测心跳可以让独立的Eureka Server有弹性地适应故障，就像有些监控和弹性运行时服务一样（比如Cloud Foundry），独立模式中：
-
-```yml
-eureka:
-  instance:
-    hostname: localhost
-  client:
-    register-with-eureka: false
-    fetch-registry: false
-    service-url:
-      default-zone: http://${eureka.instance.hostname}:${server.port}/eureka/
-```
-
-可以看到`register-with-eureka`和`fetch-registry`都设置成了`false`，这个就是让Eureka工作在独立模式中，让它不要尝试去连接他的配对Eureka Server并且没有找到时也不要报错误。
-
-### 服务互发现
-
-Eureka通过多实例部署、互相注册达到弹性与高可用。默认情况下，互相注册是打开的，通过`serviceUrl`向其它实例注册。
-
-下面这段是两个Eureka Server的`application.yml`配置
-
-```yml
----
-spring:
-  profiles: peer1
-eureka:
-  instance:
-    hostname: peer1
-  client:
-    serviceUrl:
-      defaultZone: http://peer2/eureka/
-
----
-spring:
-  profiles: peer2
-eureka:
-  instance:
-    hostname: peer2
-  client:
-    serviceUrl:
-      defaultZone: http://peer1/eureka/
-```
-
-Peer1与Peer2互相注册。运行的时候可以在host文件中配上peer1和peer2域名地址。`eureka.instance.hostname`占位符在单机部署时其实是可以不用的，因为通过`java.net.InetAddress`可以找到自身的hostname。
-
-Peer之间通过直连同步注册信息。
-
-下面是三个Eureka Server实例的`application.yml`
-
-```yml
-eureka:
-  client:
-    serviceUrl:
-      defaultZone: http://peer1/eureka/,http://peer2/eureka/,http://peer3/eureka/
-
----
-spring:
-  profiles: peer1
-eureka:
-  instance:
-    hostname: peer1
-
----
-spring:
-  profiles: peer2
-eureka:
-  instance:
-    hostname: peer2
-
----
-spring:
-  profiles: peer3
-eureka:
-  instance:
-    hostname: peer3
-```
-
-为了减少篇幅，公用的部分在最上面，不一样的在`---`分行占位符之间。
-
-### 使用IP地址
-
-有些情况下，让Eureka通知应用使用ip而不是用hostname。可以设置`eureka.instance.preferIpAddress=true`，然后应用注册到Eureka时，它使用的就是它的ip地址，而不是hostname。
-
-## Eureka Client
-
-客户端注册到Eureka服务时，它需要像提供主机名、应用名、端口、主页、健康检测URL等等元数据。Eureka会接收到从每一个客户端实例中发送来的心跳消息。如果心跳在配置好的时间表中没有发送过去，Eureka就会把这个实例从注册表中移除。
-
-我们用[前一篇][第一篇]中实现的`用户服务`来充当客户端。
-
-### 导入依赖
-
-使用Eureka Client也非常简单，在项目的maven pom.xml引入下面的依赖：
-
-```xml
-<dependencies>
-        <dependency>
-            <groupId>org.springframework.cloud</groupId>
-            <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
-        </dependency>
-</dependencies>
-```
-
-### 注册
-
-然后通过`@EnableEurekaClient`就可以启用：
-
-```java
-@ComponentScan("com.printfcoder.abc.springcloud.accountcenter")
-@MapperScan("com.printfcoder.abc.springcloud.accountcenter.repository")
-@EnableEurekaClient
-@SpringBootApplication
-public class AccountCenterServer {
-    public static void main(String[] args) {
-        SpringApplication.run(AccountCenterServer.class, args);
-    }
+```json
+{
+  "/stores/**": {
+    "id": "stores",
+    "fullPath": "/stores/**",
+    "location": "http://localhost:8081",
+    "path": "/**",
+    "prefix": "/stores",
+    "retryable": false,
+    "customSensitiveHeaders": false,
+    "prefixStripped": true
+  }
 }
 ```
 
-上面这个示例是完整的Spring Boot风格的app。这个例子中，使用了`@EnableEurekaClient`标记，也并非只有Eureka服务发现可用，也可以使用`@EnableDiscoveryClient`。然后配置注册到Eureka Server的URL：
+向`/route`发送post请求会强制刷新现有的路由（比如服务目录有变化时）。可以通过`endpoints.routes.enabled=false`关闭这个接口。
+
+> 路由应该自动响应服务目录的变化，但是对于向`/routes`发送`post`请求也是一种立即更新变化的方式。
+
+## Filters Endpoint
+
+`/filters`提供返回Zuul过滤器`Map<Type,Filter>`的`Get`请求，Map中每一个过滤器类型Key对应的Value就是这个类型的过滤器与它们的详情（执行顺序、是否激活等）:
+
+```json
+{
+    "error": [
+        {
+            "class": "org.springframework.cloud.netflix.zuul.filters.post.SendErrorFilter",
+            "order": 0,
+            "disabled": false,
+            "static": true
+        }
+    ],
+    "post": [
+        {
+            "class": "org.springframework.cloud.netflix.zuul.filters.post.SendResponseFilter",
+            "order": 1000,
+            "disabled": false,
+            "static": true
+        }
+    ],
+    "pre": [
+        {
+            "class": "org.springframework.cloud.netflix.zuul.filters.pre.DebugFilter",
+            "order": 1,
+            "disabled": false,
+            "static": true
+        }
+    ]
+}
+```
+
+# 上传文件
+
+如果使用了`@EnableZuulProxy`代理，对于上传小文件到后台服务，问题不大。后面进阶部分我们再处理。
+
+# QueryString编码 
+
+请求中传入的QueryString，在经过Zuul过滤器时会被解码，这样，Zuul才有可能更改这些值。在发向后端的请求中会被重新编码，所以与原始输入查询字符串可能有差异，比如原始的是基于JavaScript的`encodeURIComponent`方法编码的，解码后再使用Java编码时可能就会有差异。对于大部分情况下，这不会引起大问题，但是还是有些Web服务器会比较挑剔。
+
+可以通过配置`zuul.force-original-query-string-encoding=true`让queryString和原始值一样，但是这个标记只在`SimpleHostRoutingFilter`中才会生效，并且也不再能简单地通过`RequestContext.getCurrentContext().setRequestQueryParams(someOverriddenParameters)`来重写参数，因为QueryString直接从原始的`HttpServletRequest`中获取的。
+
+# 内置纯净版Zuul
+
+如果使用`@EnableZuulServer`（注意不是`@EnableZuulProxy`)，就可以运行只有Zuul Server的网关，没有代理或者其它可选的代理平台。所有在应用中创建的`ZuulFilter`类型的bean都会被自动装配到应用中，就像使用`@EnableZuulProxy`，但是`代理`过滤器就不会自动加到应用中。
+
+如此看来，Zuul中的路由仍然对`zuul.routes`配置也是有响应的，但是没有服务发现与代理的能力。因此，`service-id`和`url`即使加到配置里也是无效的，下面的例子把所有的`/api/**`路径映射到Zuul过滤器链中：
 
 ```yml
+zuul:
+  routes:
+    api: /api/**
+```
+
+本节我们不会讨论纯Zuul Server的使用场景，到进阶章节中会单独讨论。
+
+# 关闭Zuul路由
+
+Spring Cloud的Zuul组件在代理（proxy）和服务（server）模式中默认自带有几个`ZuulFilter`。可以查看[Zuul Filter包](https://github.com/spring-cloud/spring-cloud-netflix/tree/master/spring-cloud-netflix-zuul/src/main/java/org/springframework/cloud/netflix/zuul/filters)翻阅这些Filter。如果要关闭某个，只需这样设置即可`zuul.<SimpleClassName>.<filterType>.disable=true`。习惯上，`filters`后面的包就是Zuul过滤器类型。比如关闭`org.springframework.cloud.netflix.zuul.filters.post.SendResponseFilter`，那么要这么设置：
+
+```properties
+zuul.SendResponseFilter.post.disable=true
+```
+
+# Timeout 超时
+
+要设置Zuul创建Socket连接超时和代理的请求读取超时，根据配置的情况有两个方式供选择：
+
+1. 如果Zuul使用了服务发现，那么需要配置`ribbon.ReadTimeout`和`ribbon.SocketTimeout`两个属性
+2. 如果Zuul配置了特殊的URL路由，那么就需要配置`zuul.host.connect-timeout-millis`、`zuul.host.socket-timeout-millis`
+
+# 开始写代码
+
+我们在上面的篇幅中介绍了Zuul的功能与如何主要特性设置，但是本节我们先不用到过滤器，也不做过度复杂的路由代理。我们只要让Zuul代理能把后台挂载在Eureka上的服务通过8080端口封装起来给外部使用。在我们的项目中，我们把`用户服务`（端口8090）通过Zuul代理（8080端口）向外界提供服务，只要外界能通过8080端口请求到`用户服务`的接口时，我们就Zuul代理服务就配置成功。本节我们只需要作简单的代理，因为登录功能还不完善，在后面进阶章节会逐步加入过滤器、鉴权、文件上传、头信息处理等特性。
+
+## 创建项目加入依赖
+
+具体代码目录，请查看本节代码[分支][本文代码]
+
+首先我们把Zuul Starter加到项目中：
+
+```xml
+  <dependency>
+      <groupId>org.springframework.cloud</groupId>
+      <artifactId>spring-cloud-starter-netflix-zuul</artifactId>
+  </dependency>
+
+  <!-- 注册到Eureka，让ribbon可以读取挂载到Eureka的服务 -->
+  <dependency>
+      <groupId>org.springframework.cloud</groupId>
+      <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
+  </dependency>
+
+  <!-- 方便查看及管理路由等信息 -->
+  <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-actuator</artifactId>
+  </dependency>
+```
+
+eureka-client主要是用来让zuul中的Ribbon可以向EurekaServer读取注册的服务，以实现负载均衡等特性。
+
+application.yml配置：
+
+```yml
+zuul:
+  routes:
+    user:
+      path: /account/**
+      service-id: User_Center_Service
+      # 是否把前缀忽略掉，先不忽略
+      strip-prefix: false
 eureka:
   client:
     service-url:
       default-zone: http://localhost:8761/eureka/
-```
-
-`default-zone`比较神奇字符串值，它告诉客户端使用这个作为默认的Eureka服务地址。
-
-> `Discovery Service`服务发现的实现中，像eureka, consul, zookeeper都有实现，而`@EnableDiscoveryClient`是spring-cloud-common中的实现。`@EnableEurekaClient`则只是给Eureka配套的服务发现。
-
-`spring-cloud-starter-netflix-eureka-client`依赖中的jar包会让应用初始化为Eureka实例（instance）与客户端（client）。可以通过`eureka.instance.*`来控制，只要保证`spring.application.name`不为空，这些默认的配置就可以不用管。
-
-关闭Eureka客户端发现功能，可以设置`eureka.client.enabled`为`false`。
-
-启动后用浏览器打开[本地8761](http://localhost:8761)， 就可以看到Eureka后台有名叫`USER_CENTER_SERVICE`服务注册到了它上面。
-
-### Eureka 服务验证
-
-Eureka支持在`default-zone`URL中指定基础的HTTP验证，比如`http://user:password@localhost:8761/eureka`。如果要更复杂的方式，可以实现`DiscoveryClientOptionalArgs`,把`ClientFilter`注入到它里面，所有从客户端到服务端的调用都会应用到。
-
-> 受限于Eureka的实现，目前不能做到给每个Eureka服务都声明各自的验证方式，只有第一个被发现的服务的验证方式会生效。
-
-### 状态页与健康指示器
-
-Spring Boot应用依赖Spring Boot Actuator后，默认就会有两个endpoint页面：状态页（/info）和健康指示器（/health)。如果要改动这个url，特别是在应用被发布在其它目录（比如 `server.servletPath=/foo`）或者管理路由（`management.contextPath=/admin`）时可以通过配置来修改,让其指向其它目录：
-
-```yml
-eureka:
-  instance:
-    status-page-url: ${management.context-path}/info
-    health-check-url: ${management.context-path}/health
-```
-
-### 注册安全的应用
-
-如果app要通过HTTPS连接，那么要分别设置`eureka.instance.[non-secure-port-enabled,secure-port-enabled]=[false,true]`。
-这样配置会让Eureka发布实现信息时偏向于使用安全链接。Spring Cloud的`DiscoveryClient`就会返回`https://...`的URL，并且Eureka实例健康检测URL也是安全链接。
-
-### 健康检测
-
-默认情况下，Eureka使用客户端心跳来判定是否客户端仍在工作。除了特殊情况，Discovery Client不会传播的每个Spring Boot Actuator当前应用的健康检测状态。也就是说，成功注册到Eureka后，就会声明该应用处于`工作`状态。不过可以通过声明Eureka健康检测改变这个默认方式，健康检测会把应用的状态传送给Eureka，该配置会把应用的状态传播到Eureka。
-
-```yml
-eureka:
-  client:
     health-check:
       enabled: true
+spring:
+  application:
+    name: netflix-zuul
+management:
+  security:
+    # 暂时关闭安全检测，方便查看endpoint，外网时不要禁掉！！！
+    enabled: false
 ```
 
-> `eureka.client.health-check.enabled=true` 只能在`application.yml(properties)`中配置，如果在`bootstrap.yml`会导致不好的影响，比如注册到Eureka时，状态会是`UNKNOWN`。
+在上面的配置中，我们把向本Zuul代理请求路径为`/account/*`的都转到应用名为`User_Center_Service`的服务上，`strip-prefix=false`是指`/account`前缀不会被去掉。
 
-可以实现`com.netflix.appinfo.HealthCheckHandler`来完成更复杂的健康检测。
+main 类：
 
-## 为什么注册服务会慢
+```java
+package com.printfcoder.abc.springcloud.netflix.zuul;
 
-实例启动后，会有周期性的心跳发送到Eureka服务（通过`service-url`指定)，默认的周期是30s。服务在启动后客户端无法访问，直到客户端、实例、服务三者之间的缓存都更新了之后，客户端才能访问到服务接口，所以，可能会花掉3*30这么长的周期。可以通过设置`eureka.instance.lease-renewal-interval-in-seconds`调小时加快客户端可以向服务端访问的进度。在生产环境中，建议保留默认值，因为30秒是比较合适的值，服务会假设这个是更新周期进行一系列内部计算。
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.cloud.netflix.zuul.EnableZuulProxy;
+
+@EnableZuulProxy
+@SpringBootApplication
+public class SpringCloudNetflixZuulServer {
+    public static void main(String[] args) {
+        SpringApplication.run(SpringCloudNetflixZuulServer.class, args);
+    }
+}
+```
+
+## 运行
+
+这里假设你已经运行起Eureka Server和AccountCenterServer，否则服务无法注册与无法发现Zuul路由要转向的服务
+
+切到zuul项目根目录下，建议使用IDE编译运行，方便调试
+
+```shell
+$mvn spring-boot:run -o
+```
+
+## 负载均衡
+
+我们运行两台`User_Center_Service`服务，都在本机运行，分别是8090、8091端口，这样，来测试Zuul代理是否将请求均衡发到不同的服务上。
+
+我们在AccountController上增加日志打印，只打印本服务的端口即可，这样我们在本机启动两个`用户服务`应用时就能打印出不同的端口以证明两台服务都收到请求：
+
+```java
+...
+public class AccountController {
+
+  Logger logger = LoggerFactory.getLogger(AccountController.class);
+
+  @Value("${server.port}")
+  private Integer serverPort;
+  ...
+  @GetMapping("get-account-by-loginname-and-pwd")
+  public Account getAccountByLoginNameAndPwd(@RequestParam("loginName") String loginName, @RequestParam("pwd") String pwd) {
+
+    logger.info("[getAccountByLoginNameAndPwd] 收到请求，本服务端口：{}", serverPort);
+    ...
+  }
+}
+```
+
+运行两台服务后，在浏览器中请求`http://localhost:8080/account/get-account-by-loginname-and-pwd?loginName=test&pwd=123`**4**次：
+
+```log
+-- server:8091
+2018-04-26 11:10:45.897  INFO 15880 --- [nio-8091-exec-2] c.p.a.s.a.controller.AccountController   : [getAccountByLoginNameAndPwd] 收到请求，本服务端口：8091
+2018-04-26 11:10:48.658  INFO 15880 --- [nio-8091-exec-4] c.p.a.s.a.controller.AccountController   : [getAccountByLoginNameAndPwd] 收到请求，本服务端口：8091
+
+-- server:8090
+2018-04-26 11:10:47.546  INFO 19232 --- [nio-8090-exec-6] c.p.a.s.a.controller.AccountController   : [getAccountByLoginNameAndPwd] 收到请求，本服务端口：8090
+2018-04-26 11:10:49.449  INFO 19232 --- [io-8090-exec-10] c.p.a.s.a.controller.AccountController   : [getAccountByLoginNameAndPwd] 收到请求，本服务端口：8090
+```
+
+可以看到，`8090`和`8091`交替接收到请求。
 
 # 总结
 
-本章简单介绍了Eureka的服务端与客户端基本配置与部署，顺带讲了健康检测等特性，后面随着章节的深入，会加入分区、健康检测（深入讲解）等。敬请期待！
+本章大致讲了Zuul主要特性与主要配置，但是对于像过滤器、头信息处理等都没去实现，主要是因为不是本篇的主题，本章旨在运行Zuul并代理后台服务，进阶部分才会一一对这些比较高阶的特性进行介绍。不知道大家有没有感觉到，现在我们有了Eureka Server、AccountCenterServer、Zuul Proxy，三个服务的配置各自管理，当服务一多起来时，配置越来越隔离，管理起来就开始麻烦、松散，越来越乱，所以下一章，我们会讲Config Server。敬请期待！
 
 # 相关链接
 
-1. [netflix 上手1][参考文章1]
-2. [netflix 上手2][参考文章2]
+## 参考阅读
+
+1. [Spring Netflix Zuul][参考文章1]
+2. [Netflix公司如何使用Zuul][Netflix_uses_zuul]
+
+## 代码
+
+1. [本文代码][本文代码]
+2. [zuul][zuul]
 
 ## 本系列文章
 
 1. [开篇][第一篇]
 2. [Netflix Eureka][第二篇]
+3. [Netflix Zuul][第三篇]
 
 [第一篇]: https://printfcoder.github.io/myblog/spring/2018/04/12/abc-spring-cloud-part-1/
 [第二篇]: https://printfcoder.github.io/myblog/spring/2018/04/13/abc-spring-cloud-part-2-netflix-eureka/
+[第三篇]: https://printfcoder.github.io/myblog/spring/2018/04/15/abc-spring-cloud-part-3-netflix-zuul/
 
-[netflix_oss]: https://netflix.github.io/
-[参考文章1]: https://cloud.spring.io/spring-cloud-netflix/multi/multi__service_discovery_eureka_clients.html
-[参考文章2]: https://cloud.spring.io/spring-cloud-static/spring-cloud.html#_spring_cloud_netflix
+[zuul]: https://github.com/Netflix/zuul
+[Netflix_uses_zuul]: https://www.slideshare.net/MikeyCohen1/edge-architecture-ieee-international-conference-on-cloud-engineering-32240146/27
+[参考文章1]: https://cloud.spring.io/spring-cloud-netflix/multi/multi__router_and_filter_zuul.html
 
-[本文代码]: https://github.com/printfcoder/spring-cloud-abc/tree/basic-part2-netflix-eureka
+[本文代码]: https://github.com/printfcoder/spring-cloud-abc/tree/basic-part3-netflix-zuul-server
