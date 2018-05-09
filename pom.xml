@@ -33,6 +33,7 @@
         <module>spring-cloud-home-plan-account-center</module>
         <module>spring-cloud-netflix-eureka-server</module>
         <module>spring-cloud-netflix-zuul-server</module>
+        <module>spring-cloud-config-server</module>
     </modules>
 
     <dependencyManagement>

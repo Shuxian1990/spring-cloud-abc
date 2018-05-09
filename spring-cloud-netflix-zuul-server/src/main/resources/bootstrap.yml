@@ -1,0 +1,9 @@
+spring:
+  profiles:
+    # 该profile可以用来匹配仓库，见spring.cloud.config.server.git.pattern用法
+    active: i-am-a-netflix-zuul-test-service
+  cloud:
+    config:
+      url: http://localhost:8888
+  application:
+    name: netflix_zuul
