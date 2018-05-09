@@ -1,12 +1,3 @@
----
-title: Spring Cloud ABC 之 Spring Cloud Config 示例
-date: 2018-04-17 08:40
-categories:
- - Spring 
-tags:
- - Spring Cloud
----
-
 本文重点介绍Config Server的配置基于Git仓库，基实Config Server是支持文本、本地文件、JDBC、GIT、SVN等仓库存储形式的，但是由于篇幅与文章中心不过度发散的原因，这里只挑git作为仓库，还有，对于加密、vault、webhook等也不会过多介绍，读者有兴趣可以到官方网站查阅[资料]([原文])
 
 对于前面的章节我们实现服务，它们的配置都是放在自己的环境中，如果自身应用多点部署，每改动一次配置就要每个节点都要去改动，这很不友好，也不安全不完备，容易漏掉或者弄错。同时，对于管理不同的应用配置，如果有一个地方可以包干，不是很好吗？
@@ -793,20 +784,23 @@ Config Server可以作为单独的服务部署，但是如果需要，也是可�
 
 1. 基础服务 Eureka Server
 2. 用户服务
-3. 计划服务
-4. Web接入层（门面层）（基于Zuul）
+3. Web接入层（门面层）（基于Zuul）
 
 那么我们就用这几个服务作为Config Client客户端。为了简单，我们每个应用都使用一个Git仓库的目录作为配置源，再配合`spring.profiles.active=指定profile`达到不同版本使用不同目录的效果，因为如果使用分支、提交id、tag等这些标记作为识别会让配置仓库管理上显得过于复杂、臃肿、为了使用而使用。有兴趣的同学可以使用不同的仓库作为不同的应用配置源，然后再用不同的目录作为开发、测试、线上版本的配置（线上版本可能需要使用受限访问的分支）。
 
+> Eureka Server不向Config Server请求配置，因为我们把Config Server向Eureka注册了，如果Eureka再向Config请求，则Config又要向Eureka注册，这样会造成蛋生鸡鸡生蛋的问题
+
 ## 用户服务配置
 
-在`classpath`中创建`bootstrap.yml`文件，并写入以下配置：
+在`classpath`中创建`bootstrap.yml`文件，并写入以下配置。
+
+**bootstrap.yml**：
 
 ```yml
 spring:
   profiles:
     # 该profile可以用来匹配仓库，见spring.cloud.config.server.git.pattern用法
-    active: i-am-a-test-service
+    active: i-am-a-home-plan-account-center-service
   cloud:
     config:
       url: http://localhost:8888
@@ -814,9 +808,11 @@ spring:
     name: User_Center_Service
 ```
 
-上面的`active`我们设置了标识`i-am-a-test-service`，用这个指识帮助Config Server拉取有这个标识配置（`spring.cloud.config.server.git.pattern`）对应的仓库。
+上面的`active`我们设置了标识`i-am-a-home-plan-account-center-service`，用这个指识帮助Config Server拉取有这个标识配置（`spring.cloud.config.server.git.pattern`）对应的仓库。
 
-在git仓库中创建目录**home-plan-account-center**，再把原来的`application.yml`剪切到这个目录，修改为如下：
+在git仓库中创建目录**home-plan-account-center**，再把原来的`application.yml`剪切到这个目录，修改为如下。
+
+**application.yml**：
 
 ```yml
 server:
@@ -856,9 +852,81 @@ $git push
 
 启动Config Server，再启动用户服务，我们可以在用户服务打印的日志中看到配置请求信息：
 
+```log
+2018-05-09 11:48:01.274  INFO 58040 --- [           main] c.c.c.ConfigServicePropertySourceLocator : Fetching config from server at: http://localhost:8888
+2018-05-09 11:48:08.233  INFO 58040 --- [           main] c.c.c.ConfigServicePropertySourceLocator : Located environment: name=User_Center_Service, profiles=[i-am-a-home-plan-account-center-service], label=null, version=77c0c040199d1a8cc3540ae8957f58fda104f91d, state=null
+2018-05-09 11:48:08.233  INFO 58040 --- [           main] b.c.PropertySourceBootstrapConfiguration : Located property source: CompositePropertySource [name='configService', propertySources=[MapPropertySource {name='configClient'}, MapPropertySource {name='overrides'}, MapPropertySource {name='git@github.com:printfcoder/spring-cloud-abc-config-repo.git/home-plan-account-center/application.yml'}, MapPropertySource {name='git@github.com:printfcoder/spring-cloud-abc-config-repo.git/application.yml'}]]
+2018-05-09 11:48:08.242  INFO 58040 --- [           main] c.p.a.s.a.launch.AccountCenterServer     : The following profiles are active: i-am-a-home-plan-account-center-service
+```
 
+可以看到匹配到了`home-plan-account-center`目录，所以我们的配置就能成功加载了。
 
+## Zuul 服务配置
 
+与用户服务一样，在`pom.xml`中添加上Config依赖，在classpath中增加`bootstrap.yml`配置，并在其中配上Config Server地址等相对不会变动的信息。
+
+**pom.xml**：
+
+```xml
+...
+<dependency>
+  <groupId>org.springframework.cloud</groupId>
+  <artifactId>spring-cloud-starter-config</artifactId>
+</dependency>
+...
+```
+
+**bootstrap.yml**：
+
+```yml
+spring:
+  profiles:
+    # 该profile可以用来匹配仓库，见spring.cloud.config.server.git.pattern用法
+    active: i-am-a-netflix-zuul-test-service
+  cloud:
+    config:
+      url: http://localhost:8888
+  application:
+    name: netflix_zuul
+```
+
+再把其application.yml修改后转移到Git仓库的`netflix-zuul`目录下。
+
+**application.yml**：
+
+```yml
+zuul:
+  routes:
+    user:
+      path: /account/**
+      service-id: User_Center_Service
+      # 是否把前缀忽略掉，先不忽略
+      strip-prefix: false
+eureka:
+  client:
+    service-url:
+      default-zone: http://localhost:8761/eureka/
+    health-check:
+      enabled: true
+spring:
+  application:
+    name: netflix-zuul
+management:
+  security:
+    # 暂时关闭安全检测，外网时不要禁掉！！！
+    enabled: false
+```
+
+现在仓库的目录如下：
+
+```log
+├── application.yml           // 默认配置
+├── home-plan-account-center  // 用户服务配置
+│   └── application.yml
+├── netflix-zuul              // zuul 网关配置
+│   └── application.yml
+...
+```
 
 # 相关链接
 
@@ -890,4 +958,4 @@ $git push
 [Vault]: https://www.vaultproject.io/
 [基础示例]: https://github.com/printfcoder/spring-cloud-abc/tree/basic-config-and-client
 
-[本文代码]: https://github.com/printfcoder/spring-cloud-abc/tree/basic-config-and-client/spring-cloud-config
+[本文代码]: https://github.com/printfcoder/spring-cloud-abc/tree/basic-part4-cloud-config
