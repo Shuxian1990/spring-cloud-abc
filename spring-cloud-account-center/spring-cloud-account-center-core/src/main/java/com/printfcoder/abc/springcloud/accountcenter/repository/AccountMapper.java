@@ -1,6 +1,6 @@
 package com.printfcoder.abc.springcloud.accountcenter.repository;
 
-import com.printfcoder.abc.springcloud.accountcenter.domain.Account;
+import com.printfcoder.abc.springcloud.accountcenter.account.domain.Account;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;

@@ -1,4 +1,4 @@
-package com.printfcoder.abc.springcloud.accountcenter.domain;
+package com.printfcoder.abc.springcloud.accountcenter.account.domain;
 
 import lombok.Data;
 

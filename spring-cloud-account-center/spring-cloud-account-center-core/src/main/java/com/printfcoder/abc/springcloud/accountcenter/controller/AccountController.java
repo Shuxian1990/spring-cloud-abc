@@ -1,6 +1,7 @@
 package com.printfcoder.abc.springcloud.accountcenter.controller;
 
-import com.printfcoder.abc.springcloud.accountcenter.domain.Account;
+
+import com.printfcoder.abc.springcloud.accountcenter.account.domain.Account;
 import com.printfcoder.abc.springcloud.accountcenter.service.AccountService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

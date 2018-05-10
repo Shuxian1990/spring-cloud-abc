@@ -5,5 +5,5 @@ CREATE TABLE IF NOT EXISTS public.account (
   pwd          VARCHAR(128) NOT NULL
 );
 
-INSERT INTO public.account (account_name, login_name, pwd)
-VALUES ('test', 'test', '123') ON CONFLICT DO NOTHING;
+INSERT INTO public.account (id, account_name, login_name, pwd)
+VALUES (1, 'test', 'test', '123') ON CONFLICT DO NOTHING;
