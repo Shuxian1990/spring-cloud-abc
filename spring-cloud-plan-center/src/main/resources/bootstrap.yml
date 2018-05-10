@@ -1,9 +1,9 @@
 spring:
   profiles:
     # 该profile可以用来匹配仓库，见spring.cloud.config.server.git.pattern用法
-    active: i-am-a-home-plan-account-center-test-service
+    active: i-am-a-plan-center-test-service
   cloud:
     config:
       url: http://localhost:8888
   application:
-    name: User_Center_Service
+    name: Plan_Center_Service

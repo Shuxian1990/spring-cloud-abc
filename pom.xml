@@ -30,10 +30,11 @@
     <packaging>pom</packaging>
 
     <modules>
-        <module>spring-cloud-home-plan-account-center</module>
+        <module>spring-cloud-account-center</module>
         <module>spring-cloud-netflix-eureka-server</module>
         <module>spring-cloud-netflix-zuul-server</module>
         <module>spring-cloud-config-server</module>
+        <module>spring-cloud-plan-center</module>
     </modules>
 
     <dependencyManagement>
@@ -81,6 +82,14 @@
                 <version>${pg.version}</version>
             </dependency>
             <!-- endregion mybatis 依赖 -->
+
+            <!-- region 自依赖-->
+            <dependency>
+                <groupId>com.printfcoder.abc</groupId>
+                <artifactId>spring-cloud-account-center-domain</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <!-- endregion -->
         </dependencies>
     </dependencyManagement>
 </project>

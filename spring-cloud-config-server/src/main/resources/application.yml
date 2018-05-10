@@ -20,7 +20,8 @@ spring:
           # 不使用临时目录，使用自定义目录，配置仓库会克隆到本项目目录中，在.gitignore中已经忽略这个文件夹，放在这里只是为了方便查看
           basedir: ${user.home}\Projects\mine\spring-cloud-abc\spring-cloud-config-server\config-server-repo\
           repos:
-            ## 该名字只是个人眼可读名，不起匹配作用，只有在其下的配置有用
+            # 该名字只是个人眼可读名，不起匹配作用，只有在其下的配置有用
+            # 账户中心配置
             home-plan-account-center:
               uri: git@github.com:printfcoder/spring-cloud-abc-config-repo.git
               clone-on-start: true
@@ -30,17 +31,20 @@ spring:
               search-paths: home-plan-account-center
               # 使用模式匹配，下面的这个模式会匹配应用名为User_Center_Service且profiles里有i-am-a-home-plan-account-center-service的应用
               pattern: User_Center_Service/i-am-a-home-plan-account-center-test-service
-
-            ## 该名字只是个人眼可读名，不起匹配作用，只有在其下的配置有用
+            # zuul仓库
             netflix-zuul:
               uri: git@github.com:printfcoder/spring-cloud-abc-config-repo.git
               clone-on-start: true
-              # 强制拉取，不让要本地clone变脏
               force-pull: true
-              # 指定目录，也可以使用占位符
               search-paths: netflix-zuul
-              # 使用模式匹配，下面的这个模式会匹配应用名为netflix-zuul且profiles里有i-am-a-zuul-server-test-service的应用
               pattern: netflix_zuul/i-am-a-netflix-zuul-test-service
+            # 计划中心仓库
+            plan-center:
+              uri: git@github.com:printfcoder/spring-cloud-abc-config-repo.git
+              clone-on-start: true
+              force-pull: true
+              search-paths: plan-center
+              pattern: Plan_Center_Service/i-am-a-plan-center-test-service
 
         # 重写，意思是下面的配置如果在Client中存在，那么会被Config Server的值重写
         overrides:
