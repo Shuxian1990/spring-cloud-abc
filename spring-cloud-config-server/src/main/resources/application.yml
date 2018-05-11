@@ -3,6 +3,8 @@ server:
 spring:
   config:
     name: Config_Server
+  application:
+      name: Config_Server
   cloud:
     config:
       server:
@@ -18,7 +20,7 @@ spring:
           # 远端不存在的分支删掉
           delete-untracked-branches: true
           # 不使用临时目录，使用自定义目录，配置仓库会克隆到本项目目录中，在.gitignore中已经忽略这个文件夹，放在这里只是为了方便查看
-          basedir: ${user.home}\Projects\mine\spring-cloud-abc\spring-cloud-config-server\config-server-repo\
+          basedir: C:\Projects\mine\spring-cloud-abc\spring-cloud-config-server\config-server-repo\
           repos:
             # 该名字只是个人眼可读名，不起匹配作用，只有在其下的配置有用
             # 账户中心配置
@@ -57,6 +59,7 @@ spring:
             myservice-dev:
               name: myservice
               profiles: development
+
 
 management:
   security:

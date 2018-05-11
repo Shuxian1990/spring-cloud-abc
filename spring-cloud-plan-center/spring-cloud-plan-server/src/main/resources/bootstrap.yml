@@ -4,6 +4,6 @@ spring:
     active: i-am-a-plan-center-test-service
   cloud:
     config:
-      url: http://localhost:8888
+     # url: http://localhost:8888
   application:
     name: Plan_Center_Service
