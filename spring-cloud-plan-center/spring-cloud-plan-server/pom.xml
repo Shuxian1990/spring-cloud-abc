@@ -13,10 +13,6 @@
 
 
     <dependencies>
-        <dependency>
-            <groupId>com.printfcoder.abc</groupId>
-            <artifactId>spring-cloud-account-center-domain</artifactId>
-        </dependency>
 
         <dependency>
             <groupId>com.printfcoder.abc</groupId>
@@ -33,11 +29,9 @@
             <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
 
-
-
         <dependency>
             <groupId>org.springframework.cloud</groupId>
-            <artifactId>spring-cloud-starter-feign</artifactId>
+            <artifactId>spring-cloud-starter-openfeign</artifactId>
         </dependency>
 
         <dependency>

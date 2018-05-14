@@ -1,5 +1,5 @@
 # Created by .ignore support plugin (hsz.mobi)
 .idea
 *.iml
-config-git-repo
+config-server-repo
 target

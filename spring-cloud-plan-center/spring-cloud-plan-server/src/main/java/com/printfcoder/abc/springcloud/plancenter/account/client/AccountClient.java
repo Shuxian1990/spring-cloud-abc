@@ -7,8 +7,9 @@ import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RequestParam;
 
 @FeignClient(name = "${account.api.application-name}")
+@RequestMapping(value = "account")
 public interface AccountClient {
 
-    @RequestMapping(method = RequestMethod.GET, value = "query-role-by-id")
+    @RequestMapping(method = RequestMethod.GET, value = "get-account-by-loginname-and-pwd")
     Account getAccountByLoginNameAndPwd(@RequestParam("loginName") String loginName, @RequestParam("pwd") String pwd);
 }

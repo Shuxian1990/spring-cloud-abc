@@ -32,7 +32,7 @@ spring:
               # 指定目录，也可以使用占位符
               search-paths: home-plan-account-center
               # 使用模式匹配，下面的这个模式会匹配应用名为User_Center_Service且profiles里有i-am-a-home-plan-account-center-service的应用
-              pattern: User_Center_Service/i-am-a-home-plan-account-center-test-service
+              pattern: User-Center-Service/i-am-a-home-plan-account-center-test-service
             # zuul仓库
             netflix-zuul:
               uri: git@github.com:printfcoder/spring-cloud-abc-config-repo.git
@@ -46,7 +46,7 @@ spring:
               clone-on-start: true
               force-pull: true
               search-paths: plan-center
-              pattern: Plan_Center_Service/i-am-a-plan-center-test-service
+              pattern: Plan-Center-Service/i-am-a-plan-center-test-service
 
         # 重写，意思是下面的配置如果在Client中存在，那么会被Config Server的值重写
         overrides:

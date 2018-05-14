@@ -6,4 +6,4 @@ spring:
     config:
       url: http://localhost:8888
   application:
-    name: User_Center_Service
+    name: User-Center-Service

@@ -6,4 +6,4 @@ spring:
     config:
      # url: http://localhost:8888
   application:
-    name: Plan_Center_Service
+    name: Plan-Center-Service
